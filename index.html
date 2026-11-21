@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#c8553d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="鉤針計數">
+<title>鉤針圈數計數器</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root {
+    --bg: #fbf6f0; --card: #ffffff; --text: #2d2a26; --muted: #8a8178;
+    --accent: #c8553d; --accent-soft: #f3d9d1; --line: #ece4da;
+    --btn2: #e9e1d7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1a18; --card: #26231f; --text: #f1ebe4; --muted: #9c9389;
+      --accent: #e07a5f; --accent-soft: #3d2c26; --line: #36312c;
+      --btn2: #34302b;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", sans-serif;
+    background: var(--bg); color: var(--text);
+    display: flex; flex-direction: column;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    user-select: none; -webkit-user-select: none;
+  }
+  header {
+    display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  select {
+    flex: 1; font-size: 17px; padding: 8px 10px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--card); color: var(--text);
+  }
+  .icon-btn {
+    border: none; background: var(--btn2); color: var(--text);
+    border-radius: 10px; min-width: 40px; height: 40px; font-size: 18px; cursor: pointer;
+  }
+  .icon-btn.on { background: var(--accent); color: #fff; }
+  main { flex: 1; display: flex; flex-direction: column; padding: 12px; gap: 12px; min-height: 0; }
+  .counter {
+    background: var(--card); border-radius: 18px; border: 1px solid var(--line);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .counter.rows { flex: 3; }
+  .counter.stitches { flex: 2; }
+  .counter-top {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 14px 0; color: var(--muted); font-size: 14px;
+  }
+  .counter-top button {
+    background: none; border: none; color: var(--muted); font-size: 14px; cursor: pointer; padding: 4px;
+  }
+  .plus {
+    flex: 1; border: none; background: transparent; color: var(--text);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: pointer; min-height: 0; transition: background .08s;
+  }
+  .plus:active { background: var(--accent-soft); }
+  .num { font-size: clamp(64px, 22vw, 140px); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  .rows .num { color: var(--accent); }
+  .stitches .num { font-size: clamp(48px, 15vw, 96px); }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .of { font-size: .35em; color: var(--muted); font-weight: 500; }
+  .progress { height: 6px; background: var(--line); }
+  .progress > div { height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+  .minus-row { display: flex; border-top: 1px solid var(--line); }
+  .minus-row button {
+    flex: 1; border: none; background: transparent; color: var(--text);
+    padding: 12px; font-size: 18px; cursor: pointer;
+  }
+  .minus-row button + button { border-left: 1px solid var(--line); }
+  .minus-row button:active { background: var(--btn2); }
+  .note {
+    font-size: 14px; color: var(--muted); padding: 0 2px; white-space: pre-wrap;
+    max-height: 3.2em; overflow: auto;
+  }
+  footer { display: flex; gap: 8px; padding: 0 12px 12px; }
+  footer button {
+    flex: 1; border: none; border-radius: 12px; padding: 14px; font-size: 16px;
+    background: var(--btn2); color: var(--text); cursor: pointer;
+  }
+  footer button:disabled { opacity: .4; }
+  dialog {
+    border: none; border-radius: 16px; padding: 20px; width: min(92vw, 420px);
+    background: var(--card); color: var(--text);
+  }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  dialog h2 { margin: 0 0 14px; font-size: 19px; }
+  dialog label { display: block; font-size: 14px; color: var(--muted); margin: 12px 0 4px; }
+  dialog input, dialog textarea {
+    width: 100%; font-size: 16px; padding: 10px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--text); font-family: inherit;
+    user-select: text; -webkit-user-select: text;
+  }
+  dialog textarea { min-height: 70px; resize: vertical; }
+  .dlg-actions { display: flex; gap: 8px; margin-top: 18px; }
+  .dlg-actions button {
+    flex: 1; padding: 12px; border-radius: 10px; border: none; font-size: 16px;
+    background: var(--btn2); color: var(--text); cursor: pointer;
+  }
+  .dlg-actions .primary { background: var(--accent); color: #fff; }
+  .dlg-actions .danger { color: #d64545; }
+  .toast {
+    position: fixed; left: 50%; bottom: calc(80px + env(safe-area-inset-bottom));
+    transform: translateX(-50%); background: var(--text); color: var(--bg);
+    padding: 10px 16px; border-radius: 999px; font-size: 14px; opacity: 0;
+    transition: opacity .2s; pointer-events: none;
+  }
+  .toast.show { opacity: .92; }
+</style>
+</head>
+<body>
+<header>
+  <select id="projectSelect" aria-label="選擇專案"></select>
+  <button class="icon-btn" id="addBtn" aria-label="新增專案">＋</button>
+  <button class="icon-btn" id="editBtn" aria-label="編輯專案">✎</button>
+  <button class="icon-btn" id="wakeBtn" aria-label="螢幕常亮" title="螢幕常亮">☀︎</button>
+</header>
+
+<main>
+  <section class="counter rows">
+    <div class="counter-top"><span>圈數</span><span id="rowTarget"></span></div>
+    <button class="plus" id="rowPlus" aria-label="圈數加一">
+      <div class="num" id="rowNum">0</div>
+      <div class="hint">點一下 +1 圈（針數自動歸零）</div>
+    </button>
+    <div class="progress"><div id="bar"></div></div>
+    <div class="minus-row">
+      <button id="rowMinus" aria-label="圈數減一">− 1 圈</button>
+    </div>
+  </section>
+
+  <section class="counter stitches">
+    <div class="counter-top"><span>這圈針數</span><button id="stitchReset">歸零</button></div>
+    <button class="plus" id="stitchPlus" aria-label="針數加一">
+      <div class="num" id="stitchNum">0</div>
+    </button>
+    <div class="minus-row">
+      <button id="stitchMinus" aria-label="針數減一">− 1 針</button>
+    </div>
+  </section>
+
+  <div class="note" id="noteView"></div>
+</main>
+
+<footer>
+  <button id="undoBtn">↶ 復原</button>
+</footer>
+
+<dialog id="dlg">
+  <form method="dialog" id="dlgForm">
+    <h2 id="dlgTitle">新增專案</h2>
+    <label for="fName">名稱</label>
+    <input id="fName" required maxlength="40" placeholder="例如：兔子玩偶－頭">
+    <label for="fTarget">目標圈數（可留空）</label>
+    <input id="fTarget" type="number" inputmode="numeric" min="0" max="9999">
+    <label for="fNote">備註（線材、鉤針號數…）</label>
+    <textarea id="fNote" maxlength="500"></textarea>
+    <div class="dlg-actions">
+      <button value="cancel" formnovalidate>取消</button>
+      <button value="delete" class="danger" id="delBtn" formnovalidate>刪除</button>
+      <button value="ok" class="primary">儲存</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  const KEY = 'crochet-counter-v1';
+  const $ = id => document.getElementById(id);
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+  // ---------- 資料 ----------
+  function load() {
+    try {
+      const d = JSON.parse(localStorage.getItem(KEY));
+      if (d && Array.isArray(d.projects) && d.projects.length) return d;
+    } catch (e) {}
+    const p = { id: uid(), name: '我的第一個作品', rows: 0, stitches: 0, target: null, note: '', history: [] };
+    return { current: p.id, projects: [p] };
+  }
+  let state = load();
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+  const cur = () => state.projects.find(p => p.id === state.current) || state.projects[0];
+
+  // ---------- 畫面 ----------
+  function render() {
+    const p = cur();
+    const sel = $('projectSelect');
+    sel.innerHTML = '';
+    state.projects.forEach(x => {
+      const o = document.createElement('option');
+      o.value = x.id; o.textContent = `${x.name}（${x.rows} 圈）`;
+      if (x.id === p.id) o.selected = true;
+      sel.appendChild(o);
+    });
+    $('rowNum').innerHTML = p.target ? `${p.rows}<span class="of"> / ${p.target}</span>` : p.rows;
+    $('stitchNum').textContent = p.stitches;
+    $('rowTarget').textContent = p.target ? `${Math.min(100, Math.round(p.rows / p.target * 100))}%` : '';
+    $('bar').style.width = p.target ? Math.min(100, p.rows / p.target * 100) + '%' : '0';
+    $('noteView').textContent = p.note || '';
+    $('undoBtn').disabled = !p.history.length;
+  }
+
+  // ---------- 動作 ----------
+  function buzz(ms = 15) { if (navigator.vibrate) navigator.vibrate(ms); }
+  function change(fn, vib) {
+    const p = cur();
+    p.history.push({ rows: p.rows, stitches: p.stitches });
+    if (p.history.length > 200) p.history.shift();
+    fn(p);
+    save(); render(); buzz(vib);
+  }
+  function toast(msg) {
+    const t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 1500);
+  }
+
+  $('rowPlus').onclick = () => change(p => {
+    p.rows++; p.stitches = 0;
+    if (p.target && p.rows === p.target) setTimeout(() => toast('🎉 達成目標圈數！'), 50);
+  }, 30);
+  $('rowMinus').onclick = () => { if (cur().rows > 0) change(p => p.rows--); };
+  $('stitchPlus').onclick = () => change(p => p.stitches++);
+  $('stitchMinus').onclick = () => { if (cur().stitches > 0) change(p => p.stitches--); };
+  $('stitchReset').onclick = () => { if (cur().stitches > 0) change(p => p.stitches = 0); };
+  $('undoBtn').onclick = () => {
+    const p = cur(); const h = p.history.pop();
+    if (!h) return;
+    p.rows = h.rows; p.stitches = h.stitches;
+    save(); render(); buzz(10); toast('已復原');
+  };
+  $('projectSelect').onchange = e => { state.current = e.target.value; save(); render(); };
+
+  // ---------- 專案對話框 ----------
+  let editing = null;
+  function openDlg(p) {
+    editing = p;
+    $('dlgTitle').textContent = p ? '編輯專案' : '新增專案';
+    $('fName').value = p ? p.name : '';
+    $('fTarget').value = p && p.target ? p.target : '';
+    $('fNote').value = p ? p.note : '';
+    $('delBtn').style.display = p && state.projects.length > 1 ? '' : 'none';
+    $('dlg').showModal();
+  }
+  $('addBtn').onclick = () => openDlg(null);
+  $('editBtn').onclick = () => openDlg(cur());
+  $('dlg').addEventListener('close', () => {
+    const v = $('dlg').returnValue;
+    if (v === 'ok') {
+      const name = $('fName').value.trim() || '未命名';
+      const t = parseInt($('fTarget').value, 10);
+      const target = t > 0 ? t : null;
+      const note = $('fNote').value.trim();
+      if (editing) Object.assign(editing, { name, target, note });
+      else {
+        const p = { id: uid(), name, rows: 0, stitches: 0, target, note, history: [] };
+        state.projects.push(p); state.current = p.id;
+      }
+    } else if (v === 'delete' && editing) {
+      if (confirm(`確定刪除「${editing.name}」？`)) {
+        state.projects = state.projects.filter(x => x !== editing);
+        state.current = state.projects[0].id;
+      }
+    }
+    save(); render();
+  });
+
+  // ---------- 螢幕常亮 ----------
+  let lock = null, wantLock = false;
+  async function requestLock() {
+    try {
+      lock = await navigator.wakeLock.request('screen');
+      lock.addEventListener('release', () => { lock = null; });
+    } catch (e) { wantLock = false; toast('此瀏覽器不支援螢幕常亮'); }
+    $('wakeBtn').classList.toggle('on', wantLock);
+  }
+  $('wakeBtn').onclick = async () => {
+    if (!('wakeLock' in navigator)) return toast('此瀏覽器不支援螢幕常亮');
+    wantLock = !wantLock;
+    if (wantLock) { await requestLock(); if (wantLock) toast('螢幕常亮：開'); }
+    else { if (lock) await lock.release(); $('wakeBtn').classList.remove('on'); toast('螢幕常亮：關'); }
+  };
+  document.addEventListener('visibilitychange', () => {
+    if (wantLock && document.visibilityState === 'visible' && !lock) requestLock();
+  });
+
+  // ---------- 鍵盤（電腦用） ----------
+  document.addEventListener('keydown', e => {
+    if ($('dlg').open) return;
+    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); $('stitchPlus').click(); }
+    else if (e.key === 'r' || e.key === 'ArrowUp') $('rowPlus').click();
+    else if ((e.ctrlKey || e.metaKey) && e.key === 'z') $('undoBtn').click();
+  });
+
+  // ---------- 離線 ----------
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+
+  render();
+})();
+</script>
+</body>
+</html>
