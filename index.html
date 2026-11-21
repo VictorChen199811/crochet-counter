@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<meta name="theme-color" content="#c8553d">
+<meta name="theme-color" content="#c8553d" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1a18" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="鉤針計數">
 <title>鉤針圈數計數器</title>
@@ -24,6 +25,8 @@
     }
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  button, select { touch-action: manipulation; font-family: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   html, body { margin: 0; height: 100%; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", sans-serif;
@@ -166,14 +169,14 @@
     <label for="fNote">備註（線材、鉤針號數…）</label>
     <textarea id="fNote" maxlength="500"></textarea>
     <div class="dlg-actions">
-      <button value="cancel" formnovalidate>取消</button>
-      <button value="delete" class="danger" id="delBtn" formnovalidate>刪除</button>
+      <button type="button" id="cancelBtn">取消</button>
+      <button type="button" class="danger" id="delBtn">刪除</button>
       <button value="ok" class="primary">儲存</button>
     </div>
   </form>
 </dialog>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 (() => {
@@ -185,7 +188,15 @@
   function load() {
     try {
       const d = JSON.parse(localStorage.getItem(KEY));
-      if (d && Array.isArray(d.projects) && d.projects.length) return d;
+      if (d && Array.isArray(d.projects) && d.projects.length) {
+        d.projects.forEach(p => {
+          p.rows = Math.max(0, p.rows | 0); p.stitches = Math.max(0, p.stitches | 0);
+          if (!Array.isArray(p.history)) p.history = [];
+          if (typeof p.note !== 'string') p.note = '';
+        });
+        if (!d.projects.some(p => p.id === d.current)) d.current = d.projects[0].id;
+        return d;
+      }
     } catch (e) {}
     const p = { id: uid(), name: '我的第一個作品', rows: 0, stitches: 0, target: null, note: '', history: [] };
     return { current: p.id, projects: [p] };
@@ -198,13 +209,17 @@
   function render() {
     const p = cur();
     const sel = $('projectSelect');
-    sel.innerHTML = '';
-    state.projects.forEach(x => {
-      const o = document.createElement('option');
-      o.value = x.id; o.textContent = `${x.name}（${x.rows} 圈）`;
-      if (x.id === p.id) o.selected = true;
-      sel.appendChild(o);
+    // 只在專案清單變動時重建選單，其餘只更新文字，避免每次點擊都重排 DOM
+    const ids = state.projects.map(x => x.id).join();
+    if (sel.dataset.ids !== ids) {
+      sel.replaceChildren(...state.projects.map(x => new Option('', x.id)));
+      sel.dataset.ids = ids;
+    }
+    state.projects.forEach((x, i) => {
+      const t = `${x.name}（${x.rows} 圈）`;
+      if (sel.options[i].textContent !== t) sel.options[i].textContent = t;
     });
+    sel.value = p.id;
     $('rowNum').innerHTML = p.target ? `${p.rows}<span class="of"> / ${p.target}</span>` : p.rows;
     $('stitchNum').textContent = p.stitches;
     $('rowTarget').textContent = p.target ? `${Math.min(100, Math.round(p.rows / p.target * 100))}%` : '';
@@ -252,9 +267,12 @@
     $('fTarget').value = p && p.target ? p.target : '';
     $('fNote').value = p ? p.note : '';
     $('delBtn').style.display = p && state.projects.length > 1 ? '' : 'none';
+    $('dlg').returnValue = ''; // 避免按 Esc 關閉時沿用上一次的「儲存／刪除」
     $('dlg').showModal();
   }
   $('addBtn').onclick = () => openDlg(null);
+  $('cancelBtn').onclick = () => $('dlg').close('cancel');
+  $('delBtn').onclick = () => $('dlg').close('delete');
   $('editBtn').onclick = () => openDlg(cur());
   $('dlg').addEventListener('close', () => {
     const v = $('dlg').returnValue;
@@ -298,13 +316,21 @@
 
   // ---------- 鍵盤（電腦用） ----------
   document.addEventListener('keydown', e => {
-    if ($('dlg').open) return;
+    if ($('dlg').open || e.repeat || e.altKey) return;
+    const tag = e.target.tagName;
+    if (tag === 'SELECT' || tag === 'INPUT' || tag === 'TEXTAREA') return;
     if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); $('stitchPlus').click(); }
-    else if (e.key === 'r' || e.key === 'ArrowUp') $('rowPlus').click();
+    else if (e.key === 'r' || e.key === 'ArrowUp') { e.preventDefault(); $('rowPlus').click(); }
+    else if (e.key === 'Backspace' || e.key === 'ArrowDown') { e.preventDefault(); $('stitchMinus').click(); }
     else if ((e.ctrlKey || e.metaKey) && e.key === 'z') $('undoBtn').click();
   });
 
-  // ---------- 離線 ----------
+  // ---------- 多分頁同步 ----------
+  window.addEventListener('storage', e => { if (e.key === KEY) { state = load(); render(); } });
+
+  // ---------- 離線 / 資料保存 ----------
+  // 要求瀏覽器不要自動清除 localStorage（iOS Safari 對未安裝的網站可能清資料）
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
   render();
